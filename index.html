@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<title>Calibration Harness</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+    background: #14161a;
+    color: #f0f0f0;
+    font-family: -apple-system, system-ui, sans-serif;
+  }
+  #app {
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 12px; }
+  h2 { font-size: 1.1rem; margin: 0 0 10px; }
+  p { line-height: 1.4; }
+  .screen { width: 100%; }
+  .status-line {
+    font-size: 0.85rem;
+    background: #23262d;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin: 0 0 10px;
+    word-break: break-word;
+  }
+  label { display: block; font-size: 0.9rem; margin-bottom: 6px; }
+  input[type=text] {
+    width: 100%;
+    font-size: 1rem;
+    padding: 12px 10px;
+    border-radius: 8px;
+    border: 1px solid #444;
+    background: #1f2127;
+    color: #fff;
+    margin-bottom: 12px;
+  }
+  button {
+    width: 100%;
+    font-size: 1rem;
+    padding: 14px 10px;
+    border-radius: 8px;
+    border: none;
+    background: #3a6ff0;
+    color: #fff;
+    margin-bottom: 10px;
+    cursor: pointer;
+  }
+  button.secondary { background: #333640; }
+  button:active { opacity: 0.8; }
+  #qStem {
+    font-size: 1.15rem;
+    line-height: 1.5;
+    margin: 10px 0 18px;
+    min-height: 60px;
+  }
+  .opt-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    white-space: normal;
+    margin-bottom: 10px;
+    padding: 14px 12px;
+    font-size: 1rem;
+  }
+  #resultsTableWrap {
+    width: 100%;
+    overflow-x: auto;
+    margin-bottom: 14px;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.68rem;
+  }
+  th, td {
+    border: 1px solid #3a3d45;
+    padding: 3px 4px;
+    text-align: left;
+    word-break: break-word;
+  }
+  th { background: #23262d; }
+  textarea#resultsText {
+    width: 100%;
+    height: 180px;
+    font-size: 0.7rem;
+    font-family: monospace;
+    background: #1f2127;
+    color: #f0f0f0;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 10px;
+  }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="screen-start" class="screen">
+    <h1>Calibration Harness</h1>
+    <p class="status-line" id="mode-line">Checking mode…</p>
+    <p class="status-line" id="persist-line">Checking storage persistence…</p>
+    <label for="nameInput">Name</label>
+    <input type="text" id="nameInput" placeholder="" autocomplete="off" autocapitalize="words" autocorrect="off" spellcheck="false">
+    <button id="beginBtn">Begin</button>
+    <button id="resultsBtn" class="secondary">View recorded results</button>
+  </div>
+
+  <div id="screen-question" class="screen" hidden>
+    <div id="qStem"></div>
+    <div id="qOptions"></div>
+  </div>
+
+  <div id="screen-noq" class="screen" hidden>
+    <p id="noqMsg"></p>
+    <button id="noqBackBtn">Back to start</button>
+  </div>
+
+  <div id="screen-rundone" class="screen" hidden>
+    <p id="doneMsg"></p>
+    <button id="doneBackBtn">Back to start</button>
+  </div>
+
+  <div id="screen-results" class="screen" hidden>
+    <h2>Recorded results</h2>
+    <p class="status-line" id="resultsPersistLine"></p>
+    <div id="resultsTableWrap">
+      <table id="resultsTable"></table>
+    </div>
+    <textarea id="resultsText" readonly></textarea>
+    <button id="copyBtn">Copy text</button>
+    <button id="resultsBackBtn" class="secondary">Back to start</button>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- Question bank (verbatim from work/bank.md, batch A) ----------
+  var QUESTIONS = [
+    { id:'A01', stem:'"Kill ———, the gelatinous hivemind of slime." Which boss?', options:['Magma Turtle','Yalgaroth','Ice King','Sailord'], correct:1, band:'easy' },
+    { id:'A02', stem:'"Kill ———, the slithering warden of the Desert Temple." Which boss?', options:['Bigfish','Kai Guy','Viperhead','Granny'], correct:2, band:'easy' },
+    { id:'A03', stem:'"Kill ———, the shocking scourge of the Sinister Sea." Which boss?', options:['Prism Troll','Snow Cultist','Bigfish','Rusty Pig'], correct:2, band:'easy' },
+    { id:'A04', stem:'"Kill ———, the stone guardian of the Old World." Which boss?', options:['Archmage','Granny','Mondo Squid','Candle Knight'], correct:1, band:'easy' },
+    { id:'A05', stem:'"Kill ———, the malignant blight of our dreams." Which boss?', options:['Ice King','Purple Shark','Cata','Old Fart'], correct:3, band:'easy' },
+    { id:'A06', stem:'Which boss is found in the Silent Sanctuary?', options:['Pop Off Pirate','Shock Marauder','Grave Treelad','Rusty Pig'], correct:2, band:'easy' },
+    { id:'A07', stem:'Which boss is found on the Enchanted Island?', options:['Cata','Roadini','Archmage','Viperhead'], correct:2, band:'easy' },
+    { id:'A08', stem:'Which boss is found in The Road?', options:['Ice King','Democan','Mondo Squid','The Skeleton'], correct:1, band:'easy' },
+    { id:'A09', stem:'Which element is the Ice King?', options:['Fire','Frost','Organic','Metal'], correct:1, band:'easy' },
+    { id:'A10', stem:'The Shroomerang is the only weapon of its subtype. Which subtype?', options:['Scythe','Cleaver','Boomerang','Bell'], correct:2, band:'easy' },
+
+    { id:'A11', stem:'Which achievement do you earn for defeating The Patris?', options:['Pest Control','Dog Whisperer','Berry Good','Into The Crypt'], correct:1, band:'medium' },
+    { id:'A12', stem:'Which achievement do you earn for defeating N?', options:['Tulpa','Connection Terminated','Anomalous Energy','The Sky In Flames'], correct:2, band:'medium' },
+    { id:'A13', stem:'Which achievement do you earn for defeating Conservator Lorcan?', options:['Shipwrecked','Big Reel','The Deep End','Broken Bones'], correct:2, band:'medium' },
+    { id:'A14', stem:'Which achievement do you earn for defeating the Rusty Pig?', options:['Millennium Moment','Wonderful Machines','Killing Joke','Last Prism'], correct:1, band:'medium' },
+    { id:'A15', stem:'Which weapon subtype can use the Duelist\'s Dagger technique?', options:['Dagger','Sword','Rapier','Spear'], correct:2, band:'medium' },
+    { id:'A16', stem:'Which weapon subtype can use the Serpent Style technique?', options:['Dagger','Axe','Spear','Greatsword'], correct:2, band:'medium' },
+    { id:'A17', stem:'Which weapon subtype can benefit from Rogue?', options:['Rapier','Dagger','Fist','Sword'], correct:1, band:'medium' },
+    { id:'A18', stem:'Which weapon subtype can proc Ragged?', options:['Axe','Greatsword','Maul','Bell'], correct:2, band:'medium' },
+    { id:'A19', stem:'Which element is the Purple Shark?', options:['Water','Magic','Dark','Venom'], correct:1, band:'medium' },
+    { id:'A20', stem:'Where is the Millennium Chimera found?', options:['Factory Approach','The Landfill','Grand Terrarium','Canvas of The Golden Vista'], correct:2, band:'medium' },
+
+    { id:'A21', stem:'Which status effect does the Archmage\'s Arch Lightning attack inflict?', options:['Fire','Frostburn','Shock','Venom'], correct:2, band:'hard' },
+    { id:'A22', stem:'Which of these does the Archmage drop?', options:['Arch Fire','Arch Energy','Arch Blast','Arch Lightning'], correct:1, band:'hard' },
+    { id:'A23', stem:'Which status effect do the icicles from the Ice King\'s Icicle Swipe inflict?', options:['Frostburn','Chilled','Shock','Venom'], correct:1, band:'hard' },
+    { id:'A24', stem:'Which of these can the Ice King drop?', options:['Icicle Swipe','Icicle Rod','Elbow Drop','Ice Golem'], correct:1, band:'hard' },
+    { id:'A25', stem:'In its second phase, Rusty Pig\'s saw attacks inflict which status effect?', options:['Scared','Bleeding','Fire','Chilled'], correct:1, band:'hard' },
+    { id:'A26', stem:'Which of these does the Rusty Pig drop?', options:['Piggish Charge','Happy Feet','Pigmask','Wonderful Machines'], correct:2, band:'hard' },
+    { id:'A27', stem:'Democan\'s Fire Puddles inflict which status effect on a player who moves through them?', options:['Burning','Fire','Bleeding','Chilled'], correct:1, band:'hard' },
+    { id:'A28', stem:'Which of these does the Purple Shark drop?', options:['Purple Bolts','Purple Call','Purple Fang','Purple Hail'], correct:2, band:'hard' },
+    { id:'A29', stem:'Which of these is the Millennium Chimera\'s achievement?', options:['Millennium Cannon','Millennium Module','Millennium Moment','Ancient Gear'], correct:2, band:'hard' },
+    { id:'A30', stem:'In its second phase the Millennium Chimera digs up an implement from another enemy. Whose mandible does it take?', options:['Magnet Mor','Storm Noble','Crono','Ancient Gear'], correct:1, band:'hard' },
+
+    { id:'A31', stem:'Two Grave Treelad attacks slam its tree into the ground and release three chunks of debris. Which one also makes large roots emerge afterwards?', options:['Swipe','Slam','Charge','Leap'], correct:2, band:'expert' },
+    { id:'A32', stem:'The Archmage drops two extra items when the player carries a Challenge Medal. Which of these is one of them?', options:['Archmage Cap','Arch Energy','Nerd Glasses','Arcane Essence'], correct:2, band:'expert' },
+    { id:'A33', stem:'Three of the Ice King\'s four attacks cannot be blocked. Which one can?', options:['Stomp','Strike','Icicle Swipe','Elbow Drop'], correct:1, band:'expert' },
+    { id:'A34', stem:'The Purple Shark\'s Purple Call conjures five orbs above itself. What does it do with them if the player is far away?', options:['Purple Hail','Purple Barrage','Beam Mayhem','Spinning Conjure'], correct:1, band:'expert' },
+    { id:'A35', stem:'Which Rusty Pig attack does the wiki say is used only in its second phase, usually right at the start of it?', options:['Punt','Saw Glide','Enraged Roar','Minigun Spray'], correct:2, band:'expert' },
+    { id:'A36', stem:'Entering its second phase, Democan gains a damage reduction and a new attack pattern. What does it lose?', options:['Its Fire Puddles','Its ability to summon Missiles with War Cry','Inferno Nova','Its Horrific Screech'], correct:1, band:'expert' },
+    { id:'A37', stem:'Two Millennium Chimera attacks start by revving its chainsaw. Which one finishes by sweeping its cannon in a wide arc?', options:['Chainsaw Massacre','Chainsaw Sweep Sequence','Slash Series','Head Slam'], correct:1, band:'expert' },
+    { id:'A38', stem:'One melee subtype is named after another, and the wiki states outright that it gets none of that subtype\'s benefits. Which?', options:['Greatsword','Greatspear','Maul','Rapier'], correct:1, band:'expert' },
+    { id:'A39', stem:'One technique is listed under both the Sword and the Spear subtypes. Which?', options:['Ivory Anklet','Serpent Style','Giantslayer','Spiral Dig'], correct:2, band:'expert' },
+    { id:'A40', stem:'Guns and Pistols both shoot bullets and share one technique. Which technique can a Pistol use that a Gun cannot?', options:['Ivory Anklet','Deadeye','Azure Firecrackers','Arrow Rain'], correct:1, band:'expert' }
+  ];
+
+  // ---------- Storage ----------
+  var SEEN_KEY = 'u2h_seen_v1';
+  var RESULTS_KEY = 'u2h_results_v1';
+
+  function loadSeen() {
+    try {
+      var raw = localStorage.getItem(SEEN_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+  }
+  function saveSeen(obj) {
+    try { localStorage.setItem(SEEN_KEY, JSON.stringify(obj)); } catch (e) {}
+  }
+  function loadResults() {
+    try {
+      var raw = localStorage.getItem(RESULTS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) { return []; }
+  }
+  function saveResults(arr) {
+    try { localStorage.setItem(RESULTS_KEY, JSON.stringify(arr)); } catch (e) {}
+  }
+
+  function nameKey(name) {
+    return name.trim().toLowerCase();
+  }
+
+  // ---------- Mode detection ----------
+  var isStandalone = (window.navigator.standalone === true) ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  var modeLabel = isStandalone ? 'own installed window (not a browser tab)' : 'a browser tab';
+
+  // ---------- Persistence ----------
+  var persistStatus = 'unsupported';
+  function reportPersist() {
+    var el1 = document.getElementById('persist-line');
+    var el2 = document.getElementById('resultsPersistLine');
+    var text = 'Storage persistence: ' + persistStatus + '.';
+    if (el1) el1.textContent = text;
+    if (el2) el2.textContent = text;
+  }
+  function initPersist() {
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().then(function (granted) {
+        persistStatus = granted ? 'granted' : 'denied';
+        reportPersist();
+      }).catch(function () {
+        persistStatus = 'denied';
+        reportPersist();
+      });
+    } else {
+      persistStatus = 'unsupported';
+      reportPersist();
+    }
+  }
+
+  // ---------- Screen switching ----------
+  var screens = ['start', 'question', 'noq', 'rundone', 'results'];
+  function showScreen(name) {
+    screens.forEach(function (s) {
+      document.getElementById('screen-' + s).hidden = (s !== name);
+    });
+  }
+
+  // ---------- Shuffle ----------
+  function shuffle(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  // ---------- Run state ----------
+  var runState = null; // { displayName, key, queue: [question,...], index, seenObj }
+
+  function unseenQuestions(key, seenObj) {
+    var seenIds = seenObj[key] ? seenObj[key].ids : [];
+    return QUESTIONS.filter(function (q) { return seenIds.indexOf(q.id) === -1; });
+  }
+
+  function beginRun() {
+    var input = document.getElementById('nameInput');
+    var displayName = input.value;
+    if (!displayName || !displayName.trim()) {
+      input.focus();
+      return;
+    }
+    var key = nameKey(displayName);
+    var seenObj = loadSeen();
+    var queue = unseenQuestions(key, seenObj);
+    if (queue.length === 0) {
+      document.getElementById('noqMsg').textContent =
+        displayName.trim() + ' has already answered every question in this batch. No unseen questions remain.';
+      showScreen('noq');
+      return;
+    }
+    runState = { displayName: displayName.trim(), key: key, queue: queue, index: 0 };
+    renderQuestion();
+  }
+
+  var questionShownAt = 0;
+
+  function renderQuestion() {
+    var q = runState.queue[runState.index];
+    var stemEl = document.getElementById('qStem');
+    var optsEl = document.getElementById('qOptions');
+    stemEl.textContent = q.stem;
+    optsEl.innerHTML = '';
+
+    var order = shuffle([0, 1, 2, 3]);
+    order.forEach(function (origIdx) {
+      var btn = document.createElement('button');
+      btn.className = 'opt-btn';
+      btn.textContent = q.options[origIdx];
+      btn.addEventListener('click', function () {
+        answerQuestion(q, origIdx === q.correct);
+      });
+      optsEl.appendChild(btn);
+    });
+
+    showScreen('question');
+    questionShownAt = performance.now();
+
+    // mark seen and record a shown-but-not-answered row the moment the
+    // question is displayed, persisted immediately, before any answer.
+    var seenObj = loadSeen();
+    if (!seenObj[runState.key]) seenObj[runState.key] = { displayName: runState.displayName, ids: [] };
+    seenObj[runState.key].ids.push(q.id);
+    seenObj[runState.key].displayName = runState.displayName;
+    saveSeen(seenObj);
+
+    var results = loadResults();
+    results.push({
+      name: runState.displayName,
+      id: q.id,
+      band: q.band,
+      correct: null,
+      ms: null,
+      mode: isStandalone ? 'own-window' : 'browser-tab'
+    });
+    saveResults(results);
+  }
+
+  function answerQuestion(q, isCorrect) {
+    var ms = Math.round(performance.now() - questionShownAt);
+
+    // fill in the pending shown-but-not-answered row for this question,
+    // so a displayed-then-answered question produces exactly one row
+    var results = loadResults();
+    for (var i = results.length - 1; i >= 0; i--) {
+      var r = results[i];
+      if (r.name === runState.displayName && r.id === q.id && r.correct === null && r.ms === null) {
+        r.correct = isCorrect;
+        r.ms = ms;
+        break;
+      }
+    }
+    saveResults(results);
+
+    runState.index++;
+    if (runState.index < runState.queue.length) {
+      renderQuestion();
+    } else {
+      document.getElementById('doneMsg').textContent =
+        'All questions available to ' + runState.displayName + ' for this sitting are answered. Data is saved.';
+      runState = null;
+      showScreen('rundone');
+    }
+  }
+
+  // ---------- Results screen ----------
+  function pad(v) { return String(v); }
+
+  function renderResults() {
+    var results = loadResults();
+    var table = document.getElementById('resultsTable');
+    var rows = ['<tr><th>name</th><th>id</th><th>band</th><th>result</th><th>ms</th><th>mode</th></tr>'];
+    var lines = ['name\tid\tband\tresult\tms\tmode'];
+    results.forEach(function (r) {
+      var pending = (r.correct === null);
+      var resultTxt = pending ? 'not answered' : (r.correct ? 'right' : 'wrong');
+      var msTxt = pending ? '—' : pad(r.ms);
+      rows.push('<tr><td>' + escapeHtml(r.name) + '</td><td>' + r.id + '</td><td>' + r.band +
+        '</td><td>' + resultTxt + '</td><td>' + msTxt + '</td><td>' + r.mode + '</td></tr>');
+      lines.push([r.name, r.id, r.band, resultTxt, msTxt, r.mode].join('\t'));
+    });
+    table.innerHTML = rows.join('');
+    document.getElementById('resultsText').value = lines.join('\n');
+    reportPersist();
+    showScreen('results');
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function copyResultsText() {
+    var ta = document.getElementById('resultsText');
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    var copied = false;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ta.value).then(function () {
+        flashCopyButton(true);
+      }).catch(function () {
+        fallbackCopy();
+      });
+      return;
+    }
+    fallbackCopy();
+    function fallbackCopy() {
+      try {
+        copied = document.execCommand('copy');
+      } catch (e) { copied = false; }
+      flashCopyButton(copied);
+    }
+  }
+
+  function flashCopyButton(ok) {
+    var btn = document.getElementById('copyBtn');
+    var original = 'Copy text';
+    btn.textContent = ok ? 'Copied' : 'Select the text above and copy';
+    setTimeout(function () { btn.textContent = original; }, 1500);
+  }
+
+  // ---------- Wire up ----------
+  document.getElementById('beginBtn').addEventListener('click', beginRun);
+  document.getElementById('resultsBtn').addEventListener('click', renderResults);
+  document.getElementById('noqBackBtn').addEventListener('click', function () {
+    document.getElementById('nameInput').value = '';
+    showScreen('start');
+  });
+  document.getElementById('doneBackBtn').addEventListener('click', function () {
+    document.getElementById('nameInput').value = '';
+    showScreen('start');
+  });
+  document.getElementById('resultsBackBtn').addEventListener('click', function () {
+    showScreen('start');
+  });
+  document.getElementById('copyBtn').addEventListener('click', copyResultsText);
+
+  document.getElementById('mode-line').textContent = 'Mode: running in ' + modeLabel + '. Recording proceeds either way.';
+  initPersist();
+  showScreen('start');
+})();
+</script>
+</body>
+</html>
